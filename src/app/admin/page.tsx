@@ -47,7 +47,7 @@ export default async function AdminPage() {
           )}
         </Section>
 
-        <Section title="Emails" hint="Copy an emailId into BREW_WELCOME_EMAIL_ID in .env.local">
+        <Section title="Emails" hint="Welcome emails are generated per signup; saved emails are listed here for reference.">
           {emails.emails.length === 0 ? (
             <Empty>No emails yet — create one in the Brew dashboard.</Empty>
           ) : (
