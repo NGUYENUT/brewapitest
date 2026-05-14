@@ -38,12 +38,19 @@ export async function POST(request: Request) {
   console.log('signup body:', { email, firstName, lastName })
 
   try {
+    await brew.fields.create({
+      fieldName: 'source',
+      fieldType: 'string',
+    })
     await brew.contacts.upsert({
       email,
       firstName,
       lastName,
       subscribed: true,
-      customFields: { signedUpAt: new Date().toISOString() },
+      customFields: {
+        signedUpAt: new Date().toISOString(),
+        source: 'signup',
+      },
     })
   } catch (error) {
     if (error instanceof BrewApiError) {
