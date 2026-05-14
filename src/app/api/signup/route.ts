@@ -10,6 +10,17 @@ const SignupSchema = z.object({
 })
 
 export async function POST(request: Request) {
+  const apiKey = process.env.BREW_API_KEY
+  const emailId = process.env.BREW_WELCOME_EMAIL_ID
+  const domainId = process.env.BREW_DOMAIN_ID
+
+  if (!apiKey || !emailId || !domainId) {
+    return NextResponse.json(
+      { error: `Missing env vars: ${!apiKey ? 'BREW_API_KEY ' : ''}${!emailId ? 'BREW_WELCOME_EMAIL_ID ' : ''}${!domainId ? 'BREW_DOMAIN_ID' : ''}`.trim() },
+      { status: 500 }
+    )
+  }
+
   let body: unknown
   try {
     body = await request.json()
@@ -25,6 +36,7 @@ export async function POST(request: Request) {
     )
   }
   const { email, firstName, lastName } = parsed.data
+  console.log('signup body:', { email, firstName, lastName })
 
   try {
     await brew.contacts.upsert({
