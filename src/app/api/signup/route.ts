@@ -9,16 +9,13 @@ const SignupSchema = z.object({
   lastName: z.string().min(1),
 })
 
+const BREW_EVENTS_URL = 'https://brew.new/api/v1/events'
+const TRIGGER_EVENT_ID = 'yrHRVj4AzzsezOaG2stYo'
+
 export async function POST(request: Request) {
   const apiKey = process.env.BREW_API_KEY
-  const emailId = process.env.BREW_WELCOME_EMAIL_ID
-  const domainId = process.env.BREW_DOMAIN_ID
-
-  if (!apiKey || !emailId || !domainId) {
-    return NextResponse.json(
-      { error: `Missing env vars: ${!apiKey ? 'BREW_API_KEY ' : ''}${!emailId ? 'BREW_WELCOME_EMAIL_ID ' : ''}${!domainId ? 'BREW_DOMAIN_ID' : ''}`.trim() },
-      { status: 500 }
-    )
+  if (!apiKey) {
+    return NextResponse.json({ error: 'Missing env var: BREW_API_KEY' }, { status: 500 })
   }
 
   let body: unknown
@@ -63,25 +60,28 @@ export async function POST(request: Request) {
     throw error
   }
 
-  try {
-    const sendResult = await brew.sends.create({
-      emailId,
-      domainId,
-      subject: `Welcome, ${firstName}!`,
-      emails: [email],
-    })
-    return NextResponse.json({
-      success: true,
-      runId: sendResult.runId,
-      status: sendResult.status,
-    })
-  } catch (error) {
-    if (error instanceof BrewApiError) {
-      return NextResponse.json(
-        { error: error.message, code: error.code, param: error.param },
-        { status: error.status },
-      )
-    }
-    throw error
+  const eventRes = await fetch(BREW_EVENTS_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': crypto.randomUUID(),
+    },
+    body: JSON.stringify({
+      triggerEventId: TRIGGER_EVENT_ID,
+      payload: { email, firstName, lastName },
+    }),
+  })
+
+  if (!eventRes.ok) {
+    const errorBody = await eventRes.text()
+    console.error('event trigger failed:', eventRes.status, errorBody)
+    return NextResponse.json(
+      { error: 'Failed to trigger automation', detail: errorBody },
+      { status: eventRes.status },
+    )
   }
+
+  const eventData = await eventRes.json().catch(() => ({}))
+  return NextResponse.json({ success: true, event: eventData })
 }
