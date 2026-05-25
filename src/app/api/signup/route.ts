@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { BrewApiError } from '@brew.new/sdk'
 import { brew } from '@/lib/brew'
+import { supabaseAdmin } from '@/lib/supabase'
 
 const SignupSchema = z.object({
   email: z.string().email(),
@@ -9,15 +10,7 @@ const SignupSchema = z.object({
   lastName: z.string().min(1),
 })
 
-const BREW_EVENTS_URL = 'https://brew.new/api/v1/events'
-const TRIGGER_EVENT_ID = 'yrHRVj4AzzsezOaG2stYo'
-
 export async function POST(request: Request) {
-  const apiKey = process.env.BREW_API_KEY
-  if (!apiKey) {
-    return NextResponse.json({ error: 'Missing env var: BREW_API_KEY' }, { status: 500 })
-  }
-
   let body: unknown
   try {
     body = await request.json()
@@ -33,13 +26,24 @@ export async function POST(request: Request) {
     )
   }
   const { email, firstName, lastName } = parsed.data
-  console.log('signup body:', { email, firstName, lastName })
 
+  // Create user in Supabase — the auth.users trigger fires the Brew webhook,
+  // which creates the contact and starts the automation.
+  // email_confirm: true marks them as confirmed on creation so the automation fires immediately.
+  const { error: supabaseError } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    user_metadata: { first_name: firstName, last_name: lastName },
+    email_confirm: true,
+  })
+
+  // "already been registered" means they signed up before — safe to continue.
+  if (supabaseError && !supabaseError.message.toLowerCase().includes('already been registered')) {
+    return NextResponse.json({ error: supabaseError.message }, { status: 400 })
+  }
+
+  // Enrich the Brew contact with first/last name — the Supabase webhook only maps email.
   try {
-    await brew.fields.create({
-      fieldName: 'source',
-      fieldType: 'string',
-    })
+    await brew.fields.create({ fieldName: 'source', fieldType: 'string' })
     await brew.contacts.upsert({
       email,
       firstName,
@@ -60,28 +64,5 @@ export async function POST(request: Request) {
     throw error
   }
 
-  const eventRes = await fetch(BREW_EVENTS_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'Idempotency-Key': crypto.randomUUID(),
-    },
-    body: JSON.stringify({
-      triggerEventId: TRIGGER_EVENT_ID,
-      payload: { email, firstName, lastName },
-    }),
-  })
-
-  if (!eventRes.ok) {
-    const errorBody = await eventRes.text()
-    console.error('event trigger failed:', eventRes.status, errorBody)
-    return NextResponse.json(
-      { error: 'Failed to trigger automation', detail: errorBody },
-      { status: eventRes.status },
-    )
-  }
-
-  const eventData = await eventRes.json().catch(() => ({}))
-  return NextResponse.json({ success: true, event: eventData })
+  return NextResponse.json({ success: true })
 }
