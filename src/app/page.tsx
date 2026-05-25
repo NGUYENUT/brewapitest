@@ -23,7 +23,7 @@ export default function SignupPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, firstName, lastName }),
       })
-      const data = await res.json()
+      const data = await res.text().then(t => { try { return JSON.parse(t) } catch { return {} } })
       if (!res.ok) {
         setStatus({ kind: 'error', message: data.error ?? 'Something went wrong' })
         return
