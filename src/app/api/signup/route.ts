@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { BrewApiError } from '@brew.new/sdk'
 import { brew } from '@/lib/brew'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 const SignupSchema = z.object({
   email: z.string().email(),
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   // Create user in Supabase — the auth.users trigger fires the Brew webhook,
   // which creates the contact and starts the automation.
   // email_confirm: true marks them as confirmed on creation so the automation fires immediately.
-  const { error: supabaseError } = await supabaseAdmin.auth.admin.createUser({
+  const { error: supabaseError } = await getSupabaseAdmin().auth.admin.createUser({
     email,
     user_metadata: { first_name: firstName, last_name: lastName },
     email_confirm: true,
